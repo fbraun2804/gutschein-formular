@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Gutschein bestellen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; background:#fafafa; color:#222; }
+    form { max-width: 760px; margin:auto; display: grid; gap: 14px; }
+    fieldset { border: 1px solid #e5e5e5; padding: 14px; border-radius: 10px; background:#fff; }
+    legend { font-weight: 700; padding:0 6px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d0d0d0; border-radius: 8px; background:#fff; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .hint { color: #666; font-size: 0.9em; }
+    .success { background:#e8f6ec; border:1px solid #b7e1c0; color:#20643a; padding:10px; border-radius:8px; }
+    .error { background:#fdecea; border:1px solid #f5c2c0; color:#8a1f17; padding:10px; border-radius:8px; }
+    button { padding: 12px 16px; border-radius: 10px; border: none; background: #0b6; color: white; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Gutschein bestellen</h1>
+  <p class="hint">Dieses Formular sendet eine Bestellung an deinen n8n-Webhook.</p>
+
+  <form id="orderForm" novalidate>
+    <fieldset>
+      <legend>Gutschein</legend>
+
+      <label for="gutscheinart_id">Gutscheinart</label>
+      <select id="gutscheinart_id" name="gutscheinart_id" required>
+        <!-- 👉 Ersetze die IDs/Texte später durch deine echten aus Baserow (Tabelle 1135) -->
+        <option value="">Bitte wählen…</option>
+        <option value="1">Beispiel: Festbetrag (ID 1)</option>
+        <option value="999">Beispiel: Wählbarer Betrag (ID 999)</option>
+      </select>
+
+      <div id="betragBlock" style="display:none; margin-top:8px;">
+        <label for="betrag_gewaehlt">Betrag (bei „Wählbarer Betrag“)</label>
+        <input type="number" step="0.01" min="1" id="betrag_gewaehlt" name="betrag_gewaehlt" placeholder="z. B. 50.00" />
+        <div class="hint">Nur nötig bei Gutscheinart „Wählbarer Betrag“.</div>
+      </div>
+
+      <label for="anzahl" style="margin-top:8px;">Anzahl</label>
+      <input type="number" id="anzahl" name="anzahl" min="1" value="1" required />
+    </fieldset>
+
+    <fieldset>
+      <legend>Käufer</legend>
+      <div class="row">
+        <div>
+          <label for="kaeufer_name">Name</label>
+          <input type="text" id="kaeufer_name" name="käufer_name" required />
+        </div>
+        <div>
+          <label for="kaeufer_email">E-Mail</label>
+          <input type="email" id="kaeufer_email" name="käufer_email" required />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Empfänger</legend>
+      <div class="row">
+        <div>
+          <label for="empfaenger_name">Name</label>
+          <input type="text" id="empfaenger_name" name="empfänger_name" required />
+        </div>
+        <div>
+          <label for="empfaenger_email">E-Mail (optional)</label>
+          <input type="email" id="empfaenger_email" name="empfänger_email" />
+        </div>
+      </div>
+      <label for="nachricht" style="margin-top:8px;">Nachricht an Empfänger (optional)</label>
+      <textarea id="nachricht" name="nachricht_an_empfänger" rows="3" placeholder="Ihre persönliche Widmung …"></textarea>
+    </fieldset>
+
+    <button type="submit" id="submitBtn">Bestellung absenden</button>
+    <div id="result" aria-live="polite" style="margin-top:10px;"></div>
+  </form>
+
+  <script>
+    // 🔗 Webhook-URL (später anpassen! Hier erstmal Platzhalter mit HTTPS-Domain)
+    const WEBHOOK_URL = "https://DEINE-OEFFENTLICHE-N8N-DOMAIN/webhook/gutschein/order";
+
+    // Hilfslogik: „wählbar“ im Optionstext ➜ Betragfeld anzeigen
+    const artSelect = document.getElementById('gutscheinart_id');
+    const betragBlock = document.getElementById('betragBlock');
+    artSelect.addEventListener('change', () => {
+      const txt = artSelect.options[artSelect.selectedIndex]?.text?.toLowerCase() || "";
+      betragBlock.style.display = txt.includes('wählbar') ? 'block' : 'none';
+    });
+
+    const form = document.getElementById('orderForm');
+    const result = document.getElementById('result');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function show(msg, cls) { result.innerHTML = '<div class="'+cls+'">'+msg+'</div>'; }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      result.innerHTML = "";
+      submitBtn.disabled = true;
+
+      const payload = {
+        gutscheinart_id: Number(document.getElementById('gutscheinart_id').value),
+        betrag_gewaehlt: document.getElementById('betrag_gewaehlt').value ? Number(document.getElementById('betrag_gewaehlt').value) : undefined,
+        anzahl: Number(document.getElementById('anzahl').value),
+        "käufer_name": document.getElementById('kaeufer_name').value.trim(),
+        "käufer_email": document.getElementById('kaeufer_email').value.trim(),
+        "empfänger_name": document.getElementById('empfaenger_name').value.trim(),
+        "empfänger_email": document.getElementById('empfaenger_email').value.trim() || undefined,
+        "nachricht_an_empfänger": document.getElementById('nachricht').value.trim() || undefined,
+        "payment_session_intent_id": "",
+        "payment_status_roh": "created"
+      };
+
+      if (!payload.gutscheinart_id) {
+        show("Bitte eine Gutscheinart wählen.", "error");
+        submitBtn.disabled = false;
+        return;
+      }
+
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const text = await res.text();
+        let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+
+        if (!res.ok || json.ok === false) {
+          show("<strong>Fehler:</strong> " + (json?.error || (res.status + " " + res.statusText)), "error");
+        } else {
+          show("<strong>Erfolg:</strong> Bestellung erfasst. Status: <code>"+(json.status || "pending")+"</code>", "success");
+          form.reset(); betragBlock.style.display = 'none';
+        }
+      } catch (err) {
+        show("<strong>Netzwerkfehler:</strong> " + err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
