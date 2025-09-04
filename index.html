@@ -21,7 +21,7 @@
 </head>
 <body>
   <h1>Gutschein bestellen</h1>
-  <p class="hint">Dieses Formular sendet eine Bestellung an deinen n8n-Webhook.</p>
+  <p class="hint">Dieses Formular sendet Bestellungen an deinen Cloudflare-Worker. Der Worker speichert in Baserow und erstellt die Zahlung bei Mollie.</p>
 
   <form id="orderForm" novalidate>
     <fieldset>
@@ -29,16 +29,18 @@
 
       <label for="gutscheinart_id">Gutscheinart</label>
       <select id="gutscheinart_id" name="gutscheinart_id" required>
-        <!-- 👉 Ersetze die IDs/Texte später durch deine echten aus Baserow (Tabelle 1135) -->
+        <!-- 👉 Trage hier deine echten IDs/Namen aus „Gutscheinarten (Tabelle 1135)“ ein -->
         <option value="">Bitte wählen…</option>
-        <option value="1">Beispiel: Festbetrag (ID 1)</option>
-        <option value="999">Beispiel: Wählbarer Betrag (ID 999)</option>
+        <option value="1">Gutschein (ID 1 – Festbetrag)</option>
+        <!-- Beispiel für frei wählbar:
+        <option value="999">Wertgutschein (frei wählbar, ID 999)</option>
+        -->
       </select>
 
       <div id="betragBlock" style="display:none; margin-top:8px;">
-        <label for="betrag_gewaehlt">Betrag (bei „Wählbarer Betrag“)</label>
+        <label for="betrag_gewaehlt">Betrag (bei „Wertgutschein“)</label>
         <input type="number" step="0.01" min="1" id="betrag_gewaehlt" name="betrag_gewaehlt" placeholder="z. B. 50.00" />
-        <div class="hint">Nur nötig bei Gutscheinart „Wählbarer Betrag“.</div>
+        <div class="hint">Nur nötig bei Gutscheinart „Wertgutschein (frei)“.</div>
       </div>
 
       <label for="anzahl" style="margin-top:8px;">Anzahl</label>
@@ -73,28 +75,32 @@
       </div>
       <label for="nachricht" style="margin-top:8px;">Nachricht an Empfänger (optional)</label>
       <textarea id="nachricht" name="nachricht_an_empfänger" rows="3" placeholder="Ihre persönliche Widmung …"></textarea>
+
+      <label style="margin-top:8px;">
+        <input type="checkbox" id="agb" required />
+        Ich habe die <a href="/agb.html" target="_blank" rel="noopener">AGB</a> gelesen und akzeptiert.
+      </label>
     </fieldset>
 
-    <button type="submit" id="submitBtn">Bestellung absenden</button>
+    <button type="submit" id="submitBtn">Zur Zahlung</button>
     <div id="result" aria-live="polite" style="margin-top:10px;"></div>
   </form>
 
   <script>
-    // 🔗 Webhook-URL (später anpassen! Hier erstmal Platzhalter mit HTTPS-Domain)
-    const WEBHOOK_URL = "https://DEINE-OEFFENTLICHE-N8N-DOMAIN/webhook/gutschein/order";
+    // ✅ Deine öffentliche Worker-URL:
+    const WORKER_ORDER_URL = "https://vouchers-backend.f-braun.workers.dev/vouchers/order";
 
-    // Hilfslogik: „wählbar“ im Optionstext ➜ Betragfeld anzeigen
+    // Ein-/Ausblenden des Betragsfeldes (heuristisch: wenn "frei" im Namen vorkommt)
     const artSelect = document.getElementById('gutscheinart_id');
     const betragBlock = document.getElementById('betragBlock');
     artSelect.addEventListener('change', () => {
       const txt = artSelect.options[artSelect.selectedIndex]?.text?.toLowerCase() || "";
-      betragBlock.style.display = txt.includes('wählbar') ? 'block' : 'none';
+      betragBlock.style.display = (txt.includes('frei') || txt.includes('wählbar')) ? 'block' : 'none';
     });
 
     const form = document.getElementById('orderForm');
     const result = document.getElementById('result');
     const submitBtn = document.getElementById('submitBtn');
-
     function show(msg, cls) { result.innerHTML = '<div class="'+cls+'">'+msg+'</div>'; }
 
     form.addEventListener('submit', async (e) => {
@@ -111,18 +117,13 @@
         "empfänger_name": document.getElementById('empfaenger_name').value.trim(),
         "empfänger_email": document.getElementById('empfaenger_email').value.trim() || undefined,
         "nachricht_an_empfänger": document.getElementById('nachricht').value.trim() || undefined,
-        "payment_session_intent_id": "",
-        "payment_status_roh": "created"
+        agbAccepted: document.getElementById('agb').checked
       };
 
-      if (!payload.gutscheinart_id) {
-        show("Bitte eine Gutscheinart wählen.", "error");
-        submitBtn.disabled = false;
-        return;
-      }
+      if (!payload.gutscheinart_id) { show("Bitte eine Gutscheinart wählen.", "error"); submitBtn.disabled = false; return; }
 
       try {
-        const res = await fetch(WEBHOOK_URL, {
+        const res = await fetch(WORKER_ORDER_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -133,9 +134,11 @@
 
         if (!res.ok || json.ok === false) {
           show("<strong>Fehler:</strong> " + (json?.error || (res.status + " " + res.statusText)), "error");
+        } else if (json.redirectUrl) {
+          // Weiterleitung zu Mollie
+          window.location.href = json.redirectUrl;
         } else {
-          show("<strong>Erfolg:</strong> Bestellung erfasst. Status: <code>"+(json.status || "pending")+"</code>", "success");
-          form.reset(); betragBlock.style.display = 'none';
+          show("<strong>Erfolg:</strong> Bestellung erfasst, aber keine redirectUrl erhalten.", "success");
         }
       } catch (err) {
         show("<strong>Netzwerkfehler:</strong> " + err.message, "error");
