@@ -2,148 +2,129 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>Gutschein bestellen</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gutschein bestellen</title>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 24px; background:#fafafa; color:#222; }
-    form { max-width: 760px; margin:auto; display: grid; gap: 14px; }
-    fieldset { border: 1px solid #e5e5e5; padding: 14px; border-radius: 10px; background:#fff; }
-    legend { font-weight: 700; padding:0 6px; }
-    label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d0d0d0; border-radius: 8px; background:#fff; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .hint { color: #666; font-size: 0.9em; }
-    .success { background:#e8f6ec; border:1px solid #b7e1c0; color:#20643a; padding:10px; border-radius:8px; }
-    .error { background:#fdecea; border:1px solid #f5c2c0; color:#8a1f17; padding:10px; border-radius:8px; }
-    button { padding: 12px 16px; border-radius: 10px; border: none; background: #0b6; color: white; font-weight: 700; cursor: pointer; }
-    button:disabled { opacity: .6; cursor: not-allowed; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    form { display: grid; gap: 1rem; }
+    label { display: grid; gap: 0.35rem; }
+    input, select, textarea { padding: .6rem; font-size: 1rem; }
+    button { padding: .75rem 1rem; font-size: 1rem; cursor: pointer; }
+    #out { white-space: pre-wrap; background: #f6f6f6; padding: .75rem; border-radius: .5rem; display:none; }
+    .err { color:#b00020 }
+    .ok { color:#0a7d00 }
   </style>
 </head>
 <body>
-  <h1>Gutschein bestellen</h1>
-  <p class="hint">Dieses Formular sendet Bestellungen an deinen Cloudflare-Worker. Der Worker speichert in Baserow und erstellt die Zahlung bei Mollie.</p>
+  <h1>Gutschein bestellen (Test)</h1>
 
-  <form id="orderForm" novalidate>
-    <fieldset>
-      <legend>Gutschein</legend>
+  <form id="f" novalidate>
+    <label>
+      Gutschein-Artikel-ID (Tabelle 1135)
+      <input type="number" name="artikel_id" required placeholder="z. B. 1" />
+    </label>
 
-      <label for="gutscheinart_id">Gutscheinart</label>
-      <select id="gutscheinart_id" name="gutscheinart_id" required>
-        <!-- 👉 Trage hier deine echten IDs/Namen aus „Gutscheinarten (Tabelle 1135)“ ein -->
-        <option value="">Bitte wählen…</option>
-        <option value="1">Gutschein (ID 1 – Festbetrag)</option>
-        <!-- Beispiel für frei wählbar:
-        <option value="999">Wertgutschein (frei wählbar, ID 999)</option>
-        -->
+    <label>
+      Anzahl
+      <input type="number" name="anzahl" value="1" min="1" max="50" required />
+    </label>
+
+    <label>
+      Betrag (nur bei „Wählbarer Betrag“ nötig)
+      <input type="number" name="betrag" step="0.01" placeholder="z. B. 50.00" />
+    </label>
+
+    <label>
+      Ihre E-Mail
+      <input type="email" name="email" required />
+    </label>
+
+    <label>
+      Ihr Name (optional)
+      <input type="text" name="name" />
+    </label>
+
+    <label>
+      Nachricht an Empfänger (optional)
+      <textarea name="message_to_recipient" rows="3"></textarea>
+    </label>
+
+    <label style="display:flex; gap:.5rem; align-items:center">
+      <input type="checkbox" name="agb" required />
+      <span>Ich akzeptiere die AGB.</span>
+    </label>
+
+    <label>
+      Währung
+      <select name="waehrung">
+        <option value="EUR" selected>EUR</option>
       </select>
+    </label>
 
-      <div id="betragBlock" style="display:none; margin-top:8px;">
-        <label for="betrag_gewaehlt">Betrag (bei „Wertgutschein“)</label>
-        <input type="number" step="0.01" min="1" id="betrag_gewaehlt" name="betrag_gewaehlt" placeholder="z. B. 50.00" />
-        <div class="hint">Nur nötig bei Gutscheinart „Wertgutschein (frei)“.</div>
-      </div>
-
-      <label for="anzahl" style="margin-top:8px;">Anzahl</label>
-      <input type="number" id="anzahl" name="anzahl" min="1" value="1" required />
-    </fieldset>
-
-    <fieldset>
-      <legend>Käufer</legend>
-      <div class="row">
-        <div>
-          <label for="kaeufer_name">Name</label>
-          <input type="text" id="kaeufer_name" name="käufer_name" required />
-        </div>
-        <div>
-          <label for="kaeufer_email">E-Mail</label>
-          <input type="email" id="kaeufer_email" name="käufer_email" required />
-        </div>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Empfänger</legend>
-      <div class="row">
-        <div>
-          <label for="empfaenger_name">Name</label>
-          <input type="text" id="empfaenger_name" name="empfänger_name" required />
-        </div>
-        <div>
-          <label for="empfaenger_email">E-Mail (optional)</label>
-          <input type="email" id="empfaenger_email" name="empfänger_email" />
-        </div>
-      </div>
-      <label for="nachricht" style="margin-top:8px;">Nachricht an Empfänger (optional)</label>
-      <textarea id="nachricht" name="nachricht_an_empfänger" rows="3" placeholder="Ihre persönliche Widmung …"></textarea>
-
-      <label style="margin-top:8px;">
-        <input type="checkbox" id="agb" required />
-        Ich habe die <a href="/agb.html" target="_blank" rel="noopener">AGB</a> gelesen und akzeptiert.
-      </label>
-    </fieldset>
-
-    <button type="submit" id="submitBtn">Zur Zahlung</button>
-    <div id="result" aria-live="polite" style="margin-top:10px;"></div>
+    <button type="submit">Jetzt bezahlen (Test)</button>
   </form>
 
+  <div id="out"></div>
+
   <script>
-    // ✅ Deine öffentliche Worker-URL:
-    const WORKER_ORDER_URL = "https://vouchers-backend.f-braun.workers.dev/vouchers/order";
+    const ENDPOINT = "https://vouchers-backend.f-braun.workers.dev/vouchers/order";
+    const form = document.getElementById("f");
+    const out  = document.getElementById("out");
 
-    // Ein-/Ausblenden des Betragsfeldes (heuristisch: wenn "frei" im Namen vorkommt)
-    const artSelect = document.getElementById('gutscheinart_id');
-    const betragBlock = document.getElementById('betragBlock');
-    artSelect.addEventListener('change', () => {
-      const txt = artSelect.options[artSelect.selectedIndex]?.text?.toLowerCase() || "";
-      betragBlock.style.display = (txt.includes('frei') || txt.includes('wählbar')) ? 'block' : 'none';
-    });
+    function show(msg, ok=false){
+      out.style.display = "block";
+      out.className = ok ? "ok" : "err";
+      out.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+    }
 
-    const form = document.getElementById('orderForm');
-    const result = document.getElementById('result');
-    const submitBtn = document.getElementById('submitBtn');
-    function show(msg, cls) { result.innerHTML = '<div class="'+cls+'">'+msg+'</div>'; }
-
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      result.innerHTML = "";
-      submitBtn.disabled = true;
+      out.style.display = "none";
 
+      const fd = new FormData(form);
       const payload = {
-        gutscheinart_id: Number(document.getElementById('gutscheinart_id').value),
-        betrag_gewaehlt: document.getElementById('betrag_gewaehlt').value ? Number(document.getElementById('betrag_gewaehlt').value) : undefined,
-        anzahl: Number(document.getElementById('anzahl').value),
-        "käufer_name": document.getElementById('kaeufer_name').value.trim(),
-        "käufer_email": document.getElementById('kaeufer_email').value.trim(),
-        "empfänger_name": document.getElementById('empfaenger_name').value.trim(),
-        "empfänger_email": document.getElementById('empfaenger_email').value.trim() || undefined,
-        "nachricht_an_empfänger": document.getElementById('nachricht').value.trim() || undefined,
-        agbAccepted: document.getElementById('agb').checked
+        artikel_id: Number(fd.get("artikel_id")),
+        anzahl:     Number(fd.get("anzahl")),
+        betrag:     fd.get("betrag") ? Number(fd.get("betrag")) : null,
+        email:      String(fd.get("email") || "").trim(),
+        name:       String(fd.get("name") || "").trim(),
+        agb:        fd.get("agb") ? true : false,
+        message_to_recipient: String(fd.get("message_to_recipient") || "").trim(),
+        waehrung:   String(fd.get("waehrung") || "EUR").trim(),
       };
 
-      if (!payload.gutscheinart_id) { show("Bitte eine Gutscheinart wählen.", "error"); submitBtn.disabled = false; return; }
+      // einfache Client-Checks
+      if(!payload.artikel_id || !payload.anzahl || !payload.email || !payload.agb){
+        show("Bitte Artikel-ID, Anzahl, E-Mail und AGB prüfen."); return;
+      }
 
-      try {
-        const res = await fetch(WORKER_ORDER_URL, {
+      try{
+        const res = await fetch(ENDPOINT, {
           method: "POST",
+          mode: "cors",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          credentials: "omit",
+          body: JSON.stringify(payload),
+          redirect: "follow",
         });
 
-        const text = await res.text();
-        let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
-
-        if (!res.ok || json.ok === false) {
-          show("<strong>Fehler:</strong> " + (json?.error || (res.status + " " + res.statusText)), "error");
-        } else if (json.redirectUrl) {
-          // Weiterleitung zu Mollie
-          window.location.href = json.redirectUrl;
-        } else {
-          show("<strong>Erfolg:</strong> Bestellung erfasst, aber keine redirectUrl erhalten.", "success");
+        const text = await res.text().catch(()=> "");
+        // zeige Rohantwort bei Fehler
+        if(!res.ok){
+          try { show(JSON.parse(text)); } catch { show(text || `${res.status} ${res.statusText}`); }
+          return;
         }
-      } catch (err) {
-        show("<strong>Netzwerkfehler:</strong> " + err.message, "error");
-      } finally {
-        submitBtn.disabled = false;
+
+        let data = null;
+        try { data = JSON.parse(text); } catch {}
+        if(!data || !data.redirectUrl){ show("Unerwartete Antwort – keine redirectUrl."); return; }
+
+        // success anzeigen & weiterleiten
+        show({info:"Weiterleitung zu Mollie…", redirectUrl: data.redirectUrl}, true);
+        window.location.href = data.redirectUrl;
+      }catch(err){
+        console.error(err);
+        show("Netzwerkfehler – bitte später erneut versuchen.");
       }
     });
   </script>
