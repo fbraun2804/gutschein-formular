@@ -14,7 +14,8 @@
 
     form { display: grid; gap: var(--gap); }
     .row { display: grid; gap: var(--gap); }
-    /* Erste Zeile: Auswahl (35%) + Anzahl + Wert */
+
+    /* Zeile 1: Gutschein (35%) + Anzahl + Wert */
     .row.top { grid-template-columns: 35% 20% 1fr; align-items: end; }
     @media (max-width: 760px) { .row.top { grid-template-columns: 1fr; } }
 
@@ -30,19 +31,21 @@
     .checkbox { display:flex; gap:8px; align-items: flex-start; }
     .checkbox input { margin-top: 4px; }
 
-    .actions { margin-top: 8px; }
+    .actions { margin-top: 8px; display:flex; justify-content:flex-end; }
     button { background: var(--accent); color:#fff; border:0; border-radius: 10px; font-weight:600; padding: 12px 16px; font-size: 16px; cursor:pointer; }
     button:disabled { opacity:.5; cursor:not-allowed; }
 
     .error { color:#b00020; font-size: 13px; margin-top: 4px; }
-    .inline { display:flex; gap: 8px; align-items: baseline; }
-    .right { text-align:right; }
+    .alert { padding:10px 12px; border-radius:8px; background:#fff4f4; color:#7a0010; border:1px solid #ffd9d9; display:none; }
+    .ok { background:#f2fff6; color:#0a502c; border-color:#bce5cd; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Gutschein bestellen</h1>
     <p class="note">Wählen Sie einen Gutschein, die gewünschte Anzahl und ggf. den Betrag. Die Bezahlung erfolgt sicher über Mollie.</p>
+
+    <div id="msg" class="alert"></div>
 
     <form id="voucherForm" novalidate>
       <!-- Zeile 1: Auswahl + Anzahl + Wert -->
@@ -66,14 +69,14 @@
       <!-- Zeile 2: E-Mail + Wiederholung -->
       <div class="row" style="grid-template-columns: 1fr 1fr;">
         <div>
-          <label for="email">E‑Mail</label>
+          <label for="email">E-Mail</label>
           <input id="email" name="email" type="email" autocomplete="email" required />
-          <div class="error" id="emailErr" hidden>Bitte geben Sie eine gültige E‑Mail ein.</div>
+          <div class="error" id="emailErr" hidden>Bitte geben Sie eine gültige E-Mail ein.</div>
         </div>
         <div>
-          <label for="email2">E‑Mail (Wiederholung)</label>
+          <label for="email2">E-Mail (Wiederholung)</label>
           <input id="email2" name="email_confirm" type="email" autocomplete="off" required />
-          <div class="error" id="email2Err" hidden>Die E‑Mails stimmen nicht überein.</div>
+          <div class="error" id="email2Err" hidden>Die E-Mails stimmen nicht überein.</div>
         </div>
       </div>
 
@@ -103,7 +106,7 @@
         <div class="error" id="agbErr" hidden>Bitte akzeptieren Sie die AGB.</div>
       </div>
 
-      <div class="actions right">
+      <div class="actions">
         <button id="submitBtn" type="submit">Zur Kasse</button>
       </div>
     </form>
@@ -111,7 +114,8 @@
 
   <script>
     // ==== Einstellungen ====
-    const BACKEND_BASE = 'https://vouchers-backend.f-braun.workers.dev'; // ggf. anpassen
+    // Falls deine Worker-URL anders ist, hier anpassen:
+    const BACKEND_BASE = 'https://vouchers-backend.f-braun.workers.dev';
 
     // ==== Elemente ====
     const selArtikel = document.getElementById('artikel');
@@ -134,16 +138,24 @@
 
     const form = document.getElementById('voucherForm');
     const submitBtn = document.getElementById('submitBtn');
+    const msgBox = document.getElementById('msg');
 
     // ==== Utils ====
     function euro(n){ return (Math.round(Number(n || 0) * 100) / 100).toFixed(2); }
+
+    function showMsg(text, ok=false){
+      msgBox.textContent = text;
+      msgBox.classList.toggle('ok', !!ok);
+      msgBox.style.display = 'block';
+      setTimeout(() => { msgBox.style.display = 'none'; }, 6000);
+    }
 
     function applyArtikelToUI(artikel){
       const typeText = (artikel.betragstyp || '').toLowerCase();
       const isFixed = typeText.includes('fest');
 
       if (isFixed) {
-        // Fester Preis → Wert aus API, nicht editierbar (readOnly, damit es mitgesendet wird)
+        // Festpreis → Wert aus API, nicht editierbar
         const v = artikel.preis != null ? euro(artikel.preis) : '';
         inpBetrag.value = v;
         inpBetrag.readOnly = true;
@@ -152,7 +164,7 @@
         inpBetrag.placeholder = v ? `${v} €` : '';
         betragHint.textContent = 'Festpreis – Vorgabe aus Artikel';
       } else {
-        // Wertgutschein → frei zwischen min/max
+        // Wertgutschein → frei (Min/Max)
         inpBetrag.readOnly = false;
         const min = artikel.min != null ? Number(artikel.min) : 0;
         const max = artikel.max != null ? Number(artikel.max) : 0;
@@ -163,7 +175,6 @@
         if (max) hintParts.push(`max. ${euro(max)} €`);
         betragHint.textContent = hintParts.length ? hintParts.join(' · ') : 'Bitte gewünschten Betrag eingeben';
         if (!inpBetrag.value) {
-          // Platzhalter setzen
           inpBetrag.placeholder = hintParts.length ? hintParts.join(' · ') : 'z. B. 50,00';
         }
       }
@@ -177,11 +188,12 @@
       try { return JSON.parse(opt.dataset.itemJson); } catch { return null; }
     }
 
-    // ==== Laden der Artikel ====
+    // ==== Artikel laden ====
     async function loadArticles(){
       selArtikel.innerHTML = '<option>Lade…</option>';
       try {
         const r = await fetch(`${BACKEND_BASE}/vouchers/articles`, { credentials: 'omit' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
         const items = Array.isArray(data.items) ? data.items.filter(x => x.aktiv !== false) : [];
         selArtikel.innerHTML = '';
@@ -198,6 +210,7 @@
         }
       } catch (e) {
         selArtikel.innerHTML = '<option>Fehler beim Laden</option>';
+        showMsg('Fehler beim Laden der Artikel. Bitte später erneut versuchen.');
       }
     }
 
@@ -221,12 +234,12 @@
     // ==== Submit ====
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      // Grundchecks
       if (!validateEmails()) return;
       if (!chkAgb.checked) { agbErr.hidden = false; chkAgb.focus(); return; } else { agbErr.hidden = true; }
 
       const artikel = currentArtikelObj();
-      if (!artikel) return;
+      if (!artikel) { showMsg('Bitte einen Gutschein auswählen.'); return; }
+
       const payload = {
         artikel_id: selArtikel.value,
         anzahl: inpAnzahl.value,
@@ -236,24 +249,30 @@
         name: inpName.value,
         message_to_recipient: inpMsg.value,
         agb: chkAgb.checked,
-        waehrung: 'EUR' // der Server ignoriert/überschreibt ggf.; UI zeigt kein Währungsfeld mehr
+        waehrung: 'EUR' // UI zeigt kein Währungsfeld; Server akzeptiert/überschreibt ohnehin EUR
       };
 
       submitBtn.disabled = true;
       try {
         const r = await fetch(`${BACKEND_BASE}/vouchers/order`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-        const data = await r.json().catch(()=>({}));
+        const data = await r.json().catch(() => ({}));
         if (!r.ok) {
-          alert(data?.error || 'Fehler beim Absenden. Bitte erneut versuchen.');
-          submitBtn.disabled = false; return;
+          showMsg(data?.error || 'Fehler beim Absenden. Bitte erneut versuchen.');
+          submitBtn.disabled = false;
+          return;
         }
-        // Weiter zur Bezahlung
-        if (data.redirectUrl) { window.location.href = data.redirectUrl; }
-        else { alert('Antwort ohne redirectUrl.'); submitBtn.disabled = false; }
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          showMsg('Antwort ohne redirectUrl.');
+          submitBtn.disabled = false;
+        }
       } catch (e) {
-        alert('Netzwerkfehler: ' + (e?.message || e));
+        showMsg('Netzwerkfehler: ' + (e?.message || e));
         submitBtn.disabled = false;
       }
     });
