@@ -3,130 +3,263 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gutschein bestellen</title>
+  <title>Pflugsmühle – Gutschein bestellen</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-    form { display: grid; gap: 1rem; }
-    label { display: grid; gap: 0.35rem; }
-    input, select, textarea { padding: .6rem; font-size: 1rem; }
-    button { padding: .75rem 1rem; font-size: 1rem; cursor: pointer; }
-    #out { white-space: pre-wrap; background: #f6f6f6; padding: .75rem; border-radius: .5rem; display:none; }
-    .err { color:#b00020 }
-    .ok { color:#0a7d00 }
+    :root { --gap: 12px; --fg:#222; --muted:#666; --bd:#e6e6e6; --accent:#0a7; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg); margin: 0; background:#fafafa; }
+    .wrap { max-width: 840px; margin: 24px auto; background:#fff; border:1px solid var(--bd); border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.03); }
+    h1 { font-size: 22px; margin: 0 0 14px; }
+    p.note { color: var(--muted); margin: 0 0 18px; }
+
+    form { display: grid; gap: var(--gap); }
+    .row { display: grid; gap: var(--gap); }
+    /* Erste Zeile: Auswahl (35%) + Anzahl + Wert */
+    .row.top { grid-template-columns: 35% 20% 1fr; align-items: end; }
+    @media (max-width: 760px) { .row.top { grid-template-columns: 1fr; } }
+
+    label { display:block; font-size: 14px; margin: 0 0 6px; }
+    input[type="text"], input[type="email"], input[type="number"], textarea, select {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--bd); border-radius: 8px; font-size: 16px; background:#fff;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+
+    .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .counter { font-size: 12px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+    .checkbox { display:flex; gap:8px; align-items: flex-start; }
+    .checkbox input { margin-top: 4px; }
+
+    .actions { margin-top: 8px; }
+    button { background: var(--accent); color:#fff; border:0; border-radius: 10px; font-weight:600; padding: 12px 16px; font-size: 16px; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+
+    .error { color:#b00020; font-size: 13px; margin-top: 4px; }
+    .inline { display:flex; gap: 8px; align-items: baseline; }
+    .right { text-align:right; }
   </style>
 </head>
 <body>
-  <h1>Gutschein bestellen (Test)</h1>
+  <div class="wrap">
+    <h1>Gutschein bestellen</h1>
+    <p class="note">Wählen Sie einen Gutschein, die gewünschte Anzahl und ggf. den Betrag. Die Bezahlung erfolgt sicher über Mollie.</p>
 
-  <form id="f" novalidate>
-    <label>
-      Gutschein-Artikel-ID (Tabelle 1135)
-      <input type="number" name="artikel_id" required placeholder="z. B. 1" />
-    </label>
+    <form id="voucherForm" novalidate>
+      <!-- Zeile 1: Auswahl + Anzahl + Wert -->
+      <div class="row top">
+        <div>
+          <label for="artikel">Gutschein</label>
+          <select id="artikel" name="artikel_id" required></select>
+          <div class="hint" id="artikelHint"></div>
+        </div>
+        <div>
+          <label for="anzahl">Anzahl</label>
+          <input id="anzahl" name="anzahl" type="number" inputmode="numeric" min="1" max="50" step="1" value="1" required />
+        </div>
+        <div>
+          <label for="betrag">Wert (€)</label>
+          <input id="betrag" name="betrag" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="z. B. 50,00" required />
+          <div class="hint" id="betragHint"></div>
+        </div>
+      </div>
 
-    <label>
-      Anzahl
-      <input type="number" name="anzahl" value="1" min="1" max="50" required />
-    </label>
+      <!-- Zeile 2: E-Mail + Wiederholung -->
+      <div class="row" style="grid-template-columns: 1fr 1fr;">
+        <div>
+          <label for="email">E‑Mail</label>
+          <input id="email" name="email" type="email" autocomplete="email" required />
+          <div class="error" id="emailErr" hidden>Bitte geben Sie eine gültige E‑Mail ein.</div>
+        </div>
+        <div>
+          <label for="email2">E‑Mail (Wiederholung)</label>
+          <input id="email2" name="email_confirm" type="email" autocomplete="off" required />
+          <div class="error" id="email2Err" hidden>Die E‑Mails stimmen nicht überein.</div>
+        </div>
+      </div>
 
-    <label>
-      Betrag (nur bei „Wählbarer Betrag“ nötig)
-      <input type="number" name="betrag" step="0.01" placeholder="z. B. 50.00" />
-    </label>
+      <!-- Zeile 3: Name -->
+      <div class="row">
+        <div>
+          <label for="name">Ihr Name</label>
+          <input id="name" name="name" type="text" />
+        </div>
+      </div>
 
-    <label>
-      Ihre E-Mail
-      <input type="email" name="email" required />
-    </label>
+      <!-- Zeile 4: Nachricht -->
+      <div class="row">
+        <div>
+          <label for="message">Hier können Sie, wenn Sie das möchten, Text (200 Zeichen) eingeben, der dann auf dem Gutschein gedruckt wird.</label>
+          <textarea id="message" name="message_to_recipient" maxlength="200" placeholder="z. B. ‚Alles Gute zum Geburtstag!‘"></textarea>
+          <div class="counter"><span id="mc">0</span>/200</div>
+        </div>
+      </div>
 
-    <label>
-      Ihr Name (optional)
-      <input type="text" name="name" />
-    </label>
+      <!-- Zeile 5: AGB -->
+      <div class="row">
+        <label class="checkbox">
+          <input id="agb" name="agb" type="checkbox" required />
+          <span>Ich akzeptiere die <a href="https://gut-c2p.pages.dev/agb.html" target="_blank" rel="noopener">Allgemeinen Geschäftsbedingungen (AGB)</a>.</span>
+        </label>
+        <div class="error" id="agbErr" hidden>Bitte akzeptieren Sie die AGB.</div>
+      </div>
 
-    <label>
-      Nachricht an Empfänger (optional)
-      <textarea name="message_to_recipient" rows="3"></textarea>
-    </label>
-
-    <label style="display:flex; gap:.5rem; align-items:center">
-      <input type="checkbox" name="agb" required />
-      <span>Ich akzeptiere die AGB.</span>
-    </label>
-
-    <label>
-      Währung
-      <select name="waehrung">
-        <option value="EUR" selected>EUR</option>
-      </select>
-    </label>
-
-    <button type="submit">Jetzt bezahlen (Test)</button>
-  </form>
-
-  <div id="out"></div>
+      <div class="actions right">
+        <button id="submitBtn" type="submit">Zur Kasse</button>
+      </div>
+    </form>
+  </div>
 
   <script>
-    const ENDPOINT = "https://vouchers-backend.f-braun.workers.dev/vouchers/order";
-    const form = document.getElementById("f");
-    const out  = document.getElementById("out");
+    // ==== Einstellungen ====
+    const BACKEND_BASE = 'https://vouchers-backend.f-braun.workers.dev'; // ggf. anpassen
 
-    function show(msg, ok=false){
-      out.style.display = "block";
-      out.className = ok ? "ok" : "err";
-      out.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+    // ==== Elemente ====
+    const selArtikel = document.getElementById('artikel');
+    const artikelHint = document.getElementById('artikelHint');
+    const inpAnzahl = document.getElementById('anzahl');
+    const inpBetrag = document.getElementById('betrag');
+    const betragHint = document.getElementById('betragHint');
+
+    const inpEmail = document.getElementById('email');
+    const inpEmail2 = document.getElementById('email2');
+    const emailErr = document.getElementById('emailErr');
+    const email2Err = document.getElementById('email2Err');
+
+    const inpName = document.getElementById('name');
+    const inpMsg = document.getElementById('message');
+    const mc = document.getElementById('mc');
+
+    const chkAgb = document.getElementById('agb');
+    const agbErr = document.getElementById('agbErr');
+
+    const form = document.getElementById('voucherForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // ==== Utils ====
+    function euro(n){ return (Math.round(Number(n || 0) * 100) / 100).toFixed(2); }
+
+    function applyArtikelToUI(artikel){
+      const typeText = (artikel.betragstyp || '').toLowerCase();
+      const isFixed = typeText.includes('fest');
+
+      if (isFixed) {
+        // Fester Preis → Wert aus API, nicht editierbar (readOnly, damit es mitgesendet wird)
+        const v = artikel.preis != null ? euro(artikel.preis) : '';
+        inpBetrag.value = v;
+        inpBetrag.readOnly = true;
+        inpBetrag.min = '';
+        inpBetrag.max = '';
+        inpBetrag.placeholder = v ? `${v} €` : '';
+        betragHint.textContent = 'Festpreis – Vorgabe aus Artikel';
+      } else {
+        // Wertgutschein → frei zwischen min/max
+        inpBetrag.readOnly = false;
+        const min = artikel.min != null ? Number(artikel.min) : 0;
+        const max = artikel.max != null ? Number(artikel.max) : 0;
+        inpBetrag.min = min ? String(min) : '0.01';
+        inpBetrag.max = max ? String(max) : '';
+        const hintParts = [];
+        if (min) hintParts.push(`min. ${euro(min)} €`);
+        if (max) hintParts.push(`max. ${euro(max)} €`);
+        betragHint.textContent = hintParts.length ? hintParts.join(' · ') : 'Bitte gewünschten Betrag eingeben';
+        if (!inpBetrag.value) {
+          // Platzhalter setzen
+          inpBetrag.placeholder = hintParts.length ? hintParts.join(' · ') : 'z. B. 50,00';
+        }
+      }
+
+      artikelHint.textContent = artikel.name || '';
     }
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      out.style.display = "none";
+    function currentArtikelObj(){
+      const opt = selArtikel.options[selArtikel.selectedIndex];
+      if (!opt) return null;
+      try { return JSON.parse(opt.dataset.itemJson); } catch { return null; }
+    }
 
-      const fd = new FormData(form);
+    // ==== Laden der Artikel ====
+    async function loadArticles(){
+      selArtikel.innerHTML = '<option>Lade…</option>';
+      try {
+        const r = await fetch(`${BACKEND_BASE}/vouchers/articles`, { credentials: 'omit' });
+        const data = await r.json();
+        const items = Array.isArray(data.items) ? data.items.filter(x => x.aktiv !== false) : [];
+        selArtikel.innerHTML = '';
+        for (const it of items) {
+          const opt = document.createElement('option');
+          opt.value = it.id;
+          opt.textContent = it.name;
+          opt.dataset.itemJson = JSON.stringify(it);
+          selArtikel.appendChild(opt);
+        }
+        if (items[0]) {
+          selArtikel.value = items[0].id;
+          applyArtikelToUI(items[0]);
+        }
+      } catch (e) {
+        selArtikel.innerHTML = '<option>Fehler beim Laden</option>';
+      }
+    }
+
+    selArtikel.addEventListener('change', () => {
+      const obj = currentArtikelObj();
+      if (obj) applyArtikelToUI(obj);
+    });
+
+    // ==== Email-Checks ====
+    function validateEmails(){
+      let ok = true;
+      emailErr.hidden = true; email2Err.hidden = true;
+      if (!inpEmail.value || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(inpEmail.value)) { emailErr.hidden = false; ok = false; }
+      if (inpEmail.value !== inpEmail2.value) { email2Err.hidden = false; ok = false; }
+      return ok;
+    }
+
+    // Nachricht Counter
+    inpMsg.addEventListener('input', () => { mc.textContent = String(inpMsg.value.length); });
+
+    // ==== Submit ====
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      // Grundchecks
+      if (!validateEmails()) return;
+      if (!chkAgb.checked) { agbErr.hidden = false; chkAgb.focus(); return; } else { agbErr.hidden = true; }
+
+      const artikel = currentArtikelObj();
+      if (!artikel) return;
       const payload = {
-        artikel_id: Number(fd.get("artikel_id")),
-        anzahl:     Number(fd.get("anzahl")),
-        betrag:     fd.get("betrag") ? Number(fd.get("betrag")) : null,
-        email:      String(fd.get("email") || "").trim(),
-        name:       String(fd.get("name") || "").trim(),
-        agb:        fd.get("agb") ? true : false,
-        message_to_recipient: String(fd.get("message_to_recipient") || "").trim(),
-        waehrung:   String(fd.get("waehrung") || "EUR").trim(),
+        artikel_id: selArtikel.value,
+        anzahl: inpAnzahl.value,
+        betrag: inpBetrag.value,
+        email: inpEmail.value,
+        email_confirm: inpEmail2.value,
+        name: inpName.value,
+        message_to_recipient: inpMsg.value,
+        agb: chkAgb.checked,
+        waehrung: 'EUR' // der Server ignoriert/überschreibt ggf.; UI zeigt kein Währungsfeld mehr
       };
 
-      // einfache Client-Checks
-      if(!payload.artikel_id || !payload.anzahl || !payload.email || !payload.agb){
-        show("Bitte Artikel-ID, Anzahl, E-Mail und AGB prüfen."); return;
-      }
-
-      try{
-        const res = await fetch(ENDPOINT, {
-          method: "POST",
-          mode: "cors",
-          headers: { "Content-Type": "application/json" },
-          credentials: "omit",
-          body: JSON.stringify(payload),
-          redirect: "follow",
+      submitBtn.disabled = true;
+      try {
+        const r = await fetch(`${BACKEND_BASE}/vouchers/order`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
-
-        const text = await res.text().catch(()=> "");
-        // zeige Rohantwort bei Fehler
-        if(!res.ok){
-          try { show(JSON.parse(text)); } catch { show(text || `${res.status} ${res.statusText}`); }
-          return;
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok) {
+          alert(data?.error || 'Fehler beim Absenden. Bitte erneut versuchen.');
+          submitBtn.disabled = false; return;
         }
-
-        let data = null;
-        try { data = JSON.parse(text); } catch {}
-        if(!data || !data.redirectUrl){ show("Unerwartete Antwort – keine redirectUrl."); return; }
-
-        // success anzeigen & weiterleiten
-        show({info:"Weiterleitung zu Mollie…", redirectUrl: data.redirectUrl}, true);
-        window.location.href = data.redirectUrl;
-      }catch(err){
-        console.error(err);
-        show("Netzwerkfehler – bitte später erneut versuchen.");
+        // Weiter zur Bezahlung
+        if (data.redirectUrl) { window.location.href = data.redirectUrl; }
+        else { alert('Antwort ohne redirectUrl.'); submitBtn.disabled = false; }
+      } catch (e) {
+        alert('Netzwerkfehler: ' + (e?.message || e));
+        submitBtn.disabled = false;
       }
     });
+
+    // Start
+    loadArticles();
   </script>
 </body>
 </html>
